@@ -27,11 +27,25 @@
   #joy::before, #joy::after { content:""; position:absolute; left:50%; margin-left:-6px; border:6px solid transparent; opacity:.9; }
   #joy::before { top:5px; border-bottom-color:#fff; border-top-width:0; }
   #joy::after { bottom:5px; border-top-color:#fff; border-bottom-width:0; }
-  #hud { position:fixed; z-index:6; top:max(14px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%); width:min(440px, calc(100% - 28px)); background:rgba(18,51,92,.86); color:#fff; border-radius:16px; padding:9px 14px 11px; font-size:.88rem; font-weight:500; text-align:center; line-height:1.4; box-shadow:0 6px 24px rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .3s ease; }
+  #hud { position:fixed; z-index:6; top:calc(max(14px, env(safe-area-inset-top)) + 56px); left:50%; transform:translateX(-50%); width:min(440px, calc(100% - 28px)); background:rgba(18,51,92,.86); color:#fff; border-radius:16px; padding:9px 14px 11px; font-size:.88rem; font-weight:500; text-align:center; line-height:1.4; box-shadow:0 6px 24px rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .3s ease; }
   body.moving #hud { opacity:1; }
   #hud b { font-weight:800; }
   #bar { height:4px; border-radius:4px; background:rgba(255,255,255,.28); margin-top:8px; overflow:hidden; direction:ltr; }
   #bar u { display:block; height:100%; width:0; background:var(--p2); border-radius:4px; }
+  #modes { position:fixed; z-index:7; top:max(12px, env(safe-area-inset-top)); inset-inline-end:12px; display:none; gap:2px; background:var(--glass); border-radius:999px; padding:4px; box-shadow:0 6px 24px rgba(10,25,45,.22); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  body.go #modes { display:flex; }
+  #modes button { border:0; background:none; font:700 .84rem "Heebo",sans-serif; color:var(--deep); padding:8px 13px; border-radius:999px; cursor:pointer; }
+  #modes button.on { background:var(--p); color:#fff; }
+  body.m-guided #joy { opacity:0; pointer-events:none; }
+  body.m-guided .hot, body.m-track .hot { display:none !important; }
+  body.m-guided .row, body.m-track .row { display:none; }
+  #fin { position:fixed; inset:0; z-index:9; display:grid; padding:20px; background:rgba(14,26,43,.62); }
+  #fin[hidden] { display:none; }
+  .picks { display:grid; gap:10px; }
+  .picks .go { width:100%; border-radius:18px; padding:13px 18px; line-height:1.3; }
+  .picks .go small { display:block; font-size:.82rem; font-weight:500; opacity:.9; margin-top:2px; }
+  .picks .go.alt { background:#fff; color:var(--p); box-shadow:inset 0 0 0 2px var(--p); }
+  .picks .go.alt:hover { background:#eef5fb; }
   #tip { position:fixed; z-index:6; left:50%; bottom:284px; transform:translateX(-50%); background:rgba(18,51,92,.9); color:#fff; font-size:.86rem; font-weight:700; padding:7px 14px; border-radius:999px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .25s ease; }
   #tip.on { opacity:1; }
   #skip { position:fixed; z-index:6; inset-inline-end:14px; bottom:max(22px, env(safe-area-inset-bottom)); border:0; border-radius:999px; padding:9px 20px; background:rgba(18,51,92,.88); color:#fff; font:700 .9rem "Heebo",sans-serif; cursor:pointer; display:none; }
@@ -101,6 +115,8 @@
 <button id="skip">דלגו אל הדירה</button>
 <div id="hud"><span id="hudt"></span><div id="bar"><u></u></div></div>
 <div id="tip"></div>
+<div id="modes" role="group" aria-label="מצב הסיור"><button data-m="guided">מודרך</button><button data-m="track">מסלול</button><button data-m="free">חופשי</button></div>
+<div id="fin" hidden><div class="card"><h1>הסיור <em>הסתיים</em></h1><p>ראיתם את השכונה מהאוויר, את הדירה, המרפסת, הפארק, הכניסה, הלובי ובית הספר.</p><div class="picks"><button class="go" data-m="guided">לצפות שוב<small>סיור מודרך מההתחלה</small></button><button class="go alt" data-m="free">לשוטט חופשי<small>הולכים לאן שרוצים</small></button></div></div></div>
 <div id="joy" role="application" aria-label="ג'ויסטיק: קדימה ואחורה כדי לנוע, ימינה ושמאלה כדי להסתובב"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6.5 9.5 12 4l5.5 5.5M6.5 14.5 12 20l5.5-5.5"/></svg></i></div>
 <div id="load"><span>טוען את התחנה…</span></div>
 
@@ -129,9 +145,13 @@
   <div class="card">
     <div class="logos"><img src="a/lev.png" alt="לב העוטף שדרות"><img src="a/akademia.png" alt="שכונת האקדמיה"></div>
     <h1>סיור בשכונת <em>האקדמיה</em></h1>
-    <p>טסים מהאוויר, מעל הפארק, דרך המרפסת ואל תוך הסלון, ואתם שולטים בתנועה: קדימה, אחורה ומבט לכל הכיוונים. משם ממשיכים לשאר תחנות השכונה.</p>
-    <button class="go" id="go">מתחילים בסיור</button>
-    <div class="how"><span><b>ג׳ויסטיק או חיצי המקלדת</b> כדי לנוע קדימה ואחורה</span><span><b>גוררים</b> כדי להסתכל מסביב</span><span><b>+ ו־−</b> כדי להתקרב</span></div>
+    <p>טסים מהאוויר, מעל הפארק, דרך המרפסת ואל תוך הסלון, וממשיכים לפארק, לבניין ולבית הספר. בוחרים איך לסייר:</p>
+    <div class="picks" id="picks">
+      <button class="go" data-m="guided">סיור מודרך<small>יושבים וצופים, הכול רץ לבד</small></button>
+      <button class="go alt" data-m="track">סיור במסלול<small>אתם קובעים את הקצב: קדימה, אחורה ועצירה</small></button>
+      <button class="go alt" data-m="free">שיטוט חופשי<small>הולכים לאן שרוצים ומסתכלים לכל כיוון</small></button>
+    </div>
+    <div class="how"><span><b>ג׳ויסטיק או חיצי המקלדת</b> כדי לנוע</span><span><b>גוררים</b> כדי להסתכל מסביב</span><span><b>+ ו־−</b> כדי להתקרב</span></div>
     <p class="fine">ההדמיות להמחשה בלבד.</p>
   </div>
 </div>
@@ -142,8 +162,10 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 const STATIONS = [{"id": "sky", "name": "מבט-על על השכונה", "short": "מבט-על", "cap": "<b>מבט-על.</b> השכונה כולה: הבניינים, הפארק, השדרה הראשית והשדות מסביב.", "start": -0.16, "src": "p/sky.jpg", "thumb": "t/sky.jpg", "hots": [["park", -0.16, -0.22, "יורדים לפארק"], ["entrance", 0.62, -0.33, "לכניסה לבניין"], ["school", -1.85, -0.2, "לבית הספר"], ["apartment", -0.5, -0.3, "טסים אל הדירה"]]}, {"id": "park", "name": "הפארק וגן השעשועים", "short": "הפארק", "cap": "<b>הפארק השכונתי.</b> גן שעשועים, דשא ושבילים בלב הבניינים.", "start": 0, "src": "p/park.jpg", "thumb": "t/park.jpg", "hots": [["entrance", 1.316, -0.023, "לכניסה לבניין"], ["school", -0.458, -0.046, "לבית הספר"], ["sky", -2.54, 0.75, "עולים למבט-על"]]}, {"id": "entrance", "name": "הכניסה לבניין", "short": "הכניסה לבניין", "cap": "<b>הכניסה לבניין.</b> שביל מרוצף מהפארק עד הדלת.", "start": 0, "src": "p/entrance.jpg", "thumb": "t/entrance.jpg", "hots": [["lobby", -0.0, -0.062, "נכנסים ללובי"], ["park", -1.477, 0.023, "לפארק"], ["sky", -1.75, 0.9, "מבט-על"]]}, {"id": "lobby", "name": "הלובי", "short": "הלובי", "cap": "<b>הלובי.</b> מעליות, תיבות דואר ואור יום מהכניסה.", "start": 0, "src": "p/lobby.jpg", "thumb": "t/lobby.jpg", "hots": [["apartment", -0.133, -0.044, "עולים לדירה"], ["entrance", -3.142, -0.091, "יוצאים החוצה"]]}, {"id": "apartment", "name": "הדירה", "short": "הדירה", "cap": "<b>הדירה.</b> סלון ומטבח פתוח, עם יציאה למרפסת.", "start": 0, "src": "p/apartment.jpg", "thumb": "t/apartment.jpg", "hots": [["balcony", 0.146, -0.087, "יוצאים למרפסת"], ["lobby", 2.425, -0.073, "יורדים ללובי"]]}, {"id": "balcony", "name": "המרפסת", "short": "המרפסת", "cap": "<b>המרפסת.</b> קומה רביעית, מעל הפארק.", "start": 0, "src": "p/balcony.jpg", "thumb": "t/balcony.jpg", "hots": [["apartment", 2.82, -0.306, "חוזרים לסלון"], ["park", -0.106, -0.353, "יורדים לפארק"], ["sky", -0.455, 0.8, "מבט-על"]]}, {"id": "school", "name": "בית הספר", "short": "בית הספר", "cap": "<b>בית הספר.</b> בוקר בחצר, קרוב לבית.", "start": 0, "src": "p/school.jpg", "thumb": "t/school.jpg", "hots": [["park", -2.029, 0.046, "חוזרים לפארק"], ["sky", -1.907, 0.75, "מבט-על"]]}];
 // filmed camera paths between stations, as frame sequences the visitor drives forward and backward:
 // 'from>to' -> { dir, n, fps, ext, vfov, a: [yaw, pitch] of the first frame inside the 'from' picture, b: the last frame inside the 'to' picture, rev: may be played backward by a button }
-const RAILS = {"sky>park": {"dir": "m/sky_park", "n": 145, "fps": 24, "ext": "webp", "vfov": 62, "a": [-0.16, -0.42], "b": [0.0, -0.04], "rev": false}, "park>entrance": {"dir": "m/park_entrance", "n": 145, "fps": 24, "ext": "webp", "vfov": 62, "a": [1.316, 0.0], "b": [0.0, -0.02], "rev": false}, "entrance>lobby": {"dir": "m/entrance_lobby", "n": 121, "fps": 24, "ext": "webp", "vfov": 62, "a": [0.0, -0.02], "b": [-0.1, -0.03], "rev": false}, "apartment>balcony": {"dir": "m/apartment_balcony", "n": 121, "fps": 24, "ext": "webp", "vfov": 62, "a": [0.12, -0.05], "b": [-0.1, -0.22], "rev": true}, "sky>apartment": {"dir": "m/arrive", "n": 241, "fps": 24, "ext": "webp", "vfov": 70, "a": [-0.5, -0.3], "b": [3.1416, -0.063], "rev": true}};
+const RAILS = {"sky>park": {"dir": "m/sky_park", "n": 145, "fps": 24, "ext": "webp", "vfov": 62, "a": [-0.16, -0.42], "b": [0.0, -0.04], "rev": false}, "park>entrance": {"dir": "m/park_entrance", "n": 145, "fps": 24, "ext": "webp", "vfov": 62, "a": [1.316, 0.0], "b": [0.0, -0.02], "rev": false}, "entrance>lobby": {"dir": "m/entrance_lobby", "n": 121, "fps": 24, "ext": "webp", "vfov": 62, "a": [0.0, -0.02], "b": [-0.1, -0.03], "rev": false}, "apartment>balcony": {"dir": "m/apartment_balcony", "n": 121, "fps": 24, "ext": "webp", "vfov": 62, "a": [0.12, -0.05], "b": [-0.1, -0.22], "rev": true}, "sky>apartment": {"dir": "m/arrive", "n": 241, "fps": 24, "ext": "webp", "vfov": 64, "a": [-0.5, -0.3], "b": [3.1416, -0.063], "rev": true}};
 const OPEN = "sky>apartment";
+// the fixed tour: legs in order, { from, to, rail: key of a filmed path, or null for a soft cut }
+const ROUTE = [{"to": "apartment", "rail": "sky>apartment", "from": "sky"}, {"to": "balcony", "rail": "apartment>balcony", "from": "apartment"}, {"to": "park", "rail": null, "from": "balcony"}, {"to": "entrance", "rail": "park>entrance", "from": "park"}, {"to": "lobby", "rail": "entrance>lobby", "from": "entrance"}, {"to": "school", "rail": null, "from": "lobby"}, {"to": "sky", "rail": null, "from": "school"}];
 const $ = (s) => document.querySelector(s);
 const canvas = $('#gl'), hotsEl = $('#hots'), thumbs = $('#thumbs'), veil = $('#veil'), load = $('#load');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -191,8 +213,9 @@ STATIONS.forEach((st) => {
 });
 // ---- filmed paths between stations. The visitor drives them: forward and backward along the path, frame by frame
 const rc = $('#rail'), rctx = rc.getContext('2d'), skipBtn = $('#skip'), joy = $('#joy'), knob = joy.firstElementChild, tip = $('#tip'), hudt = $('#hudt'), bar = $('#bar').firstElementChild;
-let busy = false, rail = null, armed = true, wheelF = 0, tipT = 0;
-for (const k in RAILS) { const [f, t] = k.split('>'); RAILS[k].from = f; RAILS[k].to = t; }
+let busy = false, rail = null, armed = true, wheelF = 0, tipT = 0, mode = 'free', leg = 0, gtok = 0, fovTok = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+for (const k in RAILS) { const [f, t] = k.split('>'); RAILS[k].from = f; RAILS[k].to = t; RAILS[k].key = k; }
 const byId = (id) => STATIONS.find((s) => s.id === id);
 const matchFov = (vf) => { const a = innerWidth / innerHeight; return a <= 16 / 9 ? vf : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(vf / 2)) * (16 / 9) / a)); };
 const angd = (x, y) => Math.abs(((x - y + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI);
@@ -223,16 +246,17 @@ function drawRail(k) {
 }
 const waitFrame = (r, k) => new Promise((res) => { const t0 = performance.now(); (function chk() { if (r.ok[k]) return res(r.ok[k] === 1); if (performance.now() - t0 > 350) load.classList.add('on'); setTimeout(chk, 40); })(); });
 function say(t) { tip.textContent = t; tip.classList.add('on'); clearTimeout(tipT); tipT = setTimeout(() => tip.classList.remove('on'), 2600); }
-async function startRail(r, sign, auto, opening) {
-  if (busy || rail) return; busy = true; touched = true; armed = false;
+function hud(opening) { hudt.innerHTML = mode === 'guided' ? 'סיור מודרך. רוצים לשלוט בעצמכם? עוברים למעלה ל<b>מסלול</b> או ל<b>חופשי</b>.' : (opening && rail && !rail.auto ? 'דוחפים <b>קדימה</b> כדי לטוס אל הדירה. <b>אחורה</b> כדי לחזור.' : '<b>קדימה</b> כדי להתקדם, <b>אחורה</b> כדי לחזור. עוצרים בכל רגע.'); }
+async function startRail(r, sign, auto, opening, ms) {
+  if (busy || rail) return; busy = true; touched = true; armed = false; fovTok++;
   loadFrames(r, sign < 0); tex(byId(sign > 0 ? r.to : r.from)).catch(() => {});
   document.body.classList.add('moving'); hotsEl.style.display = 'none';
-  hudt.innerHTML = '<b>קדימה</b> כדי להתקדם, <b>אחורה</b> כדי לחזור. עוצרים בכל רגע.';
+  hud();
   const at = sign > 0 ? r.a : r.b;
-  if (!opening) await ease({ yaw: Math.PI / 2 - at[0], pitch: at[1], fov: matchFov(r.vfov) }, 520);
+  if (!opening) await ease({ yaw: Math.PI / 2 - at[0], pitch: at[1], fov: matchFov(r.vfov) }, ms || 520);
   const k0 = sign > 0 ? 0 : r.n - 1, ok = await waitFrame(r, k0); load.classList.remove('on');
   if (!ok) { document.body.classList.remove('moving'); hotsEl.style.display = ''; busy = false; return show(byId(sign > 0 ? r.to : r.from)); }
-  rail = { r, pos: k0, auto: auto ? sign : 0, shown: -1, opening: !!opening }; drawRail(k0); rc.classList.add('on'); busy = false;
+  rail = { r, pos: k0, auto: auto ? sign : 0, shown: -1, opening: !!opening }; rail.done = new Promise((res) => { rail.res = res; }); drawRail(k0); rc.classList.add('on'); busy = false; hud(opening);
   skipBtn.classList.toggle('on', !!opening); skipBtn.onclick = () => { if (rail) endRail(1); };
 }
 async function endRail(sign) {
@@ -240,8 +264,58 @@ async function endRail(sign) {
   const st = byId(sign > 0 ? r.to : r.from), at = sign > 0 ? r.b : r.a, view = { yaw: at[0], pitch: at[1], fov: matchFov(r.vfov) };
   if (cur === st) { yaw = Math.PI / 2 - view.yaw; pitch = view.pitch; camera.fov = view.fov; camera.updateProjectionMatrix(); } else await show(st, true, view);
   rc.classList.remove('on'); document.body.classList.remove('moving'); hotsEl.style.display = ''; busy = false; armed = false;
-  setTimeout(() => { if (!rail && !busy) ease({ yaw, pitch, fov: baseFov() }, 800); }, 420);
+  const li = ROUTE.findIndex((L) => L.rail === r.key); if (li >= 0) leg = sign > 0 ? li + 1 : li;
+  const ft = ++fovTok, f0 = camera.fov, t0 = performance.now() + 420;      // widen the lens back gently, unless the next path has already started
+  (function step(now) { if (ft !== fovTok) return; const k = Math.max(0, Math.min(1, (now - t0) / 800)), e = k * k * (3 - 2 * k); camera.fov = f0 + (baseFov() - f0) * e; camera.updateProjectionMatrix(); if (k < 1) requestAnimationFrame(step); })(performance.now());
+  R.res(sign);
 }
+// ---- the three ways to tour: guided (runs by itself), track (the visitor only moves along the fixed route), free
+async function routeStep(sign, auto) {
+  if (busy || rail || !cur) return false;
+  if (!(ROUTE[leg] && ROUTE[leg].from === cur.id) && !(leg === ROUTE.length && ROUTE[leg - 1].to === cur.id)) {
+    const i = ROUTE.findIndex((L) => L.from === cur.id);
+    if (i < 0) { busy = true; await show(STATIONS[0]); busy = false; leg = 0; armed = false; return true; }
+    leg = i;
+  }
+  const i = sign > 0 ? leg : leg - 1, L = ROUTE[i];
+  if (!L) { if (armed || auto) { if (sign > 0) $('#fin').hidden = false; else say('כאן המסלול מתחיל. דוחפים קדימה'); } armed = false; return false; }
+  const r = L.rail && RAILS[L.rail];
+  if (!r || calm || gyroOn) {                                 // a soft cut
+    if (!armed && !auto) return false;
+    busy = true; armed = false; const to = byId(sign > 0 ? L.to : L.from); say('ממשיכים אל ' + to.short); await show(to); busy = false; leg = sign > 0 ? i + 1 : i; return true;
+  }
+  const d = angd(Math.PI / 2 - yaw, (sign > 0 ? r.a : r.b)[0]);
+  await startRail(r, sign, auto, false, auto ? Math.max(1500, d / 0.7 * 1000) : Math.max(520, Math.min(2000, d / 1.3 * 1000)));
+  return true;
+}
+async function guided(my) {
+  const live = () => mode === 'guided' && my === gtok;
+  while (live()) {
+    if (rail) { rail.auto = rail.auto || 1; await rail.done; if (!live()) return; }
+    await sleep(1500); if (!live()) return;
+    if (busy || rail) continue;
+    if (leg > 0 || cur !== STATIONS[0]) { await ease({ yaw: yaw - 0.6, pitch, fov: camera.fov }, 3200); if (!live()) return; }      // a slow look around the station
+    if (!(await routeStep(1, true))) return;
+  }
+}
+async function setMode(m, restart) {
+  if (busy) return;
+  mode = m; const my = ++gtok; touched = true;
+  document.body.classList.remove('m-free', 'm-track', 'm-guided'); document.body.classList.add('m-' + m);
+  document.querySelectorAll('#modes button').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
+  $('#fin').hidden = true;
+  if (restart) {
+    if (cur !== STATIONS[0]) await show(STATIONS[0], true);
+    leg = 0;
+    if (OPEN && !calm && !gyroOn) await startRail(RAILS[OPEN], 1, m !== 'track', true);
+  } else if (rail) rail.auto = m === 'guided' ? (rail.auto || 1) : 0;
+  hud(rail && rail.opening);
+  if (m === 'track' && !rail) say('דוחפים קדימה כדי להתקדם במסלול');
+  if (m === 'free' && !rail && !restart) say('מסתובבים אל אחד החצים, ואז קדימה');
+  if (m === 'guided' && my === gtok) guided(my);
+}
+document.querySelectorAll('#modes button').forEach((b) => { b.onclick = () => { if (b.dataset.m !== mode) setMode(b.dataset.m, false); }; });
+document.querySelectorAll('#fin button').forEach((b) => { b.onclick = () => setMode(b.dataset.m, b.dataset.m === 'guided'); });
 function travel(from, to) {
   if (busy || rail) return;
   if (gyroOn || calm) return show(to);
@@ -273,9 +347,9 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => { keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); });
 addEventListener('blur', () => keys.clear());
-addEventListener('wheel', (e) => { if (rail) { e.preventDefault(); rail.auto = 0; wheelF += e.deltaY * 0.035; } }, { passive: false });
+addEventListener('wheel', (e) => { if (rail && mode !== 'guided') { e.preventDefault(); rail.auto = 0; wheelF += e.deltaY * 0.035; } }, { passive: false });
 function drive(dt) {                                       // called every frame
-  const ix = inX(), iy = inY();
+  const g = mode === 'guided', ix = g ? 0 : inX(), iy = g ? 0 : inY();
   if (Math.abs(iy) < 0.3) armed = true;
   if (rail) {
     const r = rail.r; let move = 0;
@@ -293,7 +367,8 @@ function drive(dt) {                                       // called every frame
     return;
   }
   wheelF = 0;
-  if (!started || busy) return;
+  if (!started || busy || g) return;
+  if (mode === 'track') { if (iy > 0.5) routeStep(1, false); else if (iy < -0.5) routeStep(-1, false); return; }
   if (ix) { yaw -= ix * 1.5 * dt; touched = true; }
   if (armed && iy > 0.5) tryRail(1); else if (armed && iy < -0.5) tryRail(-1);
 }
@@ -350,11 +425,8 @@ const want = STATIONS.find((s) => s.id === location.hash.slice(1));
 show(want || STATIONS[0], true);
 new MutationObserver(resize).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 if (OPEN && !want && !calm) loadFrames(RAILS[OPEN], false);
-$('#go').onclick = async () => {
-  $('#intro').remove(); started = true; document.body.classList.add('go'); canvas.focus(); resize();
-  if (OPEN && !calm) { hudt.textContent = ''; await startRail(RAILS[OPEN], 1, true, true); }
-};
-if (want) { $('#intro').remove(); started = true; document.body.classList.add('go'); resize(); }
+document.querySelectorAll('#picks button').forEach((b) => { b.onclick = () => { $('#intro').remove(); started = true; document.body.classList.add('go'); canvas.focus(); resize(); setMode(b.dataset.m, true); }; });
+if (want) { $('#intro').remove(); started = true; document.body.classList.add('go'); resize(); setMode('free', false); }
 </script>
 </body>
 </html>
