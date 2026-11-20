@@ -55,8 +55,8 @@
   @media (prefers-reduced-motion: reduce) { .hot i::after { animation:none; opacity:.6; } #veil { transition:none; } }
 
   /* intro */
-  #intro { position:fixed; inset:0; z-index:10; display:grid; place-items:center; padding:20px; background:linear-gradient(180deg, rgba(14,26,43,.55), rgba(14,26,43,.8)), url("t/park.jpg") center/cover; }
-  .card { width:min(560px,100%); background:#fff; border-radius:26px; padding:30px 26px 24px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.45); }
+  #intro { position:fixed; inset:0; z-index:10; display:grid; padding:20px; overflow-y:auto; background:linear-gradient(180deg, rgba(14,26,43,.55), rgba(14,26,43,.8)), url("t/park.jpg") center/cover; }
+  .card { margin:auto; width:min(560px,100%); background:#fff; border-radius:26px; padding:30px 26px 24px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.45); }
   .logos { display:flex; justify-content:center; align-items:center; gap:22px; flex-wrap:wrap; margin-bottom:20px; }
   .logos img { height:54px; width:auto; }
   .card h1 { margin:0 0 10px; font-size:clamp(1.7rem,6vw,2.4rem); font-weight:900; line-height:1.12; color:var(--deep); text-wrap:balance; }
@@ -64,9 +64,9 @@
   .card p { margin:0 auto 20px; max-width:42ch; color:var(--muted); font-size:1.02rem; line-height:1.6; }
   .go { border:0; background:var(--p); color:#fff; font-size:1.1rem; font-weight:800; padding:14px 34px; border-radius:999px; cursor:pointer; box-shadow:0 10px 26px rgba(23,95,161,.4); }
   .go:hover { background:var(--deep); }
-  .how { display:flex; justify-content:center; gap:18px; flex-wrap:wrap; margin:20px 0 0; padding:16px 0 0; border-top:1px solid var(--line); color:var(--muted); font-size:.86rem; }
+  .how { display:flex; justify-content:center; gap:6px 18px; flex-wrap:wrap; margin:20px 0 0; padding:16px 0 0; border-top:1px solid var(--line); color:var(--muted); font-size:.86rem; }
   .how b { color:var(--ink); font-weight:700; }
-  .fine { margin:14px 0 0; color:#8a8e94; font-size:.74rem; }
+  .card p.fine { margin:14px 0 0; color:#8a8e94; font-size:.74rem; max-width:none; }
   #load { position:fixed; inset:0; z-index:4; display:grid; place-items:center; pointer-events:none; color:#fff; font-weight:700; opacity:0; transition:opacity .2s; }
   #load.on { opacity:1; }
   #load span { background:rgba(18,51,92,.85); padding:8px 16px; border-radius:999px; }
