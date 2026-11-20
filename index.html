@@ -164,6 +164,7 @@ const STATIONS = [{"id": "sky", "name": "מבט-על על השכונה", "short"
 // 'from>to' -> { dir, n, fps, ext, vfov, a: [yaw, pitch] of the first frame inside the 'from' picture, b: the last frame inside the 'to' picture, rev: may be played backward by a button }
 const RAILS = {"sky>park": {"dir": "m/sky_park", "n": 145, "fps": 24, "ext": "webp", "vfov": 62, "a": [-0.16, -0.42], "b": [0.0, -0.04], "rev": false}, "park>entrance": {"dir": "m/park_entrance", "n": 145, "fps": 24, "ext": "webp", "vfov": 62, "a": [1.316, 0.0], "b": [0.0, -0.02], "rev": false}, "entrance>lobby": {"dir": "m/entrance_lobby", "n": 121, "fps": 24, "ext": "webp", "vfov": 62, "a": [0.0, -0.02], "b": [-0.1, -0.03], "rev": false}, "apartment>balcony": {"dir": "m/apartment_balcony", "n": 121, "fps": 24, "ext": "webp", "vfov": 62, "a": [0.12, -0.05], "b": [-0.1, -0.22], "rev": true}, "sky>apartment": {"dir": "m/arrive", "n": 241, "fps": 24, "ext": "webp", "vfov": 64, "a": [-0.5, -0.3], "b": [3.1416, -0.063], "rev": true}, "balcony>park": {"dir": "m/bal2park", "n": 241, "fps": 24, "ext": "webp", "vfov": 62, "a": [-0.1, -0.22], "b": [0.0, -0.04], "rev": true}, "lobby>school": {"dir": "m/ent2school", "n": 198, "fps": 24, "ext": "webp", "vfov": 66, "a": [3.1416, -0.05], "b": [0.9, 0.0], "rev": true}, "school>sky": {"dir": "m/sch2sky", "n": 188, "fps": 24, "ext": "webp", "vfov": 66, "a": [0.9, 0.0], "b": [-0.3, -0.22], "rev": true}, "entrance>school": {"dir": "m/ent2school", "n": 198, "fps": 24, "ext": "webp", "vfov": 66, "a": [-1.477, 0.0], "b": [0.9, 0.0], "rev": true}};
 const OPEN = "sky>apartment";
+const BUILD = '11201259';
 // the fixed tour: legs in order, { from, to, rail: key of a filmed path, or null for a soft cut }
 const ROUTE = [{"to": "apartment", "rail": "sky>apartment", "from": "sky"}, {"to": "balcony", "rail": "apartment>balcony", "from": "apartment"}, {"to": "park", "rail": "balcony>park", "from": "balcony"}, {"to": "entrance", "rail": "park>entrance", "from": "park"}, {"to": "lobby", "rail": "entrance>lobby", "from": "entrance"}, {"to": "school", "rail": "lobby>school", "from": "lobby"}, {"to": "sky", "rail": "school>sky", "from": "school"}];
 const $ = (s) => document.querySelector(s);
@@ -185,7 +186,7 @@ const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 function dirOf(y, p) { const a = Math.PI / 2 - y; return new THREE.Vector3(-Math.sin(a) * Math.cos(p), Math.sin(p), -Math.cos(a) * Math.cos(p)); }
 function tex(st) {
   if (cache[st.id]) return Promise.resolve(cache[st.id]);
-  return new Promise((ok, no) => loader.load(st.src, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; t.generateMipmaps = true; cache[st.id] = t; ok(t); }, undefined, no));
+  return new Promise((ok, no) => loader.load(st.src + '?b=' + BUILD, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; t.generateMipmaps = true; cache[st.id] = t; ok(t); }, undefined, no));
 }
 async function show(st, instant, at) {
   if (cur === st) return;
@@ -232,9 +233,9 @@ function loadFrames(r, fromEnd) {
   (function next() {
     while (live < 8 && i < order.length) {
       const k = order[i++]; if (r.imgs[k]) continue;
-      live++; const im = new Image(); im.decoding = 'async'; r.imgs[k] = im; const url = r.dir + '/' + String(k + 1).padStart(4, '0') + '.' + r.ext; let tries = 0;
+      live++; const im = new Image(); im.decoding = 'async'; r.imgs[k] = im; const url = r.dir + '/' + String(k + 1).padStart(4, '0') + '.' + r.ext + '?b=' + BUILD; let tries = 0;
       im.onload = () => { r.ok[k] = 1; live--; next(); };
-      im.onerror = () => { if (++tries < 4) return setTimeout(() => { im.src = url + '?r=' + tries; }, 500 * tries); r.ok[k] = 2; live--; next(); };   // the host sometimes answers 503 under a burst
+      im.onerror = () => { if (++tries < 4) return setTimeout(() => { im.src = url + '&r=' + tries; }, 500 * tries); r.ok[k] = 2; live--; next(); };   // the host sometimes answers 503 under a burst
       im.src = url;
     }
   })();
