@@ -119,6 +119,7 @@ const canvas = $('#gl'), hotsEl = $('#hots'), thumbs = $('#thumbs'), veil = $('#
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+const baseFov = () => (innerWidth < innerHeight ? 98 : 78);            // a tall phone screen needs a wider lens to show the same width
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(78, 1, 0.1, 100);
 camera.rotation.order = 'YXZ';
 const geo = new THREE.SphereGeometry(50, 96, 48); geo.scale(-1, 1, 1);
@@ -145,7 +146,7 @@ async function show(st, instant) {
   clearTimeout(timer); load.classList.remove('on');
   if (cur !== st) return;
   mat.map = t; mat.needsUpdate = true;
-  yaw = Math.PI / 2 - (st.start || 0); pitch = 0; gyroOffset = null; camera.fov = 78; camera.updateProjectionMatrix();
+  yaw = Math.PI / 2 - (st.start || 0); pitch = 0; gyroOffset = null; camera.fov = baseFov(); camera.updateProjectionMatrix();
   for (const [to, hy, hp, label] of st.hots) {
     const b = document.createElement('button'); b.className = 'hot'; b.innerHTML = '<i>' + ARROW + '</i><span></span>'; b.lastChild.textContent = label; b.setAttribute('aria-label', label);
     b.onclick = () => show(STATIONS.find((s) => s.id === to)); hotsEl.appendChild(b); hotNodes.push([b, dirOf(hy, hp)]);
@@ -157,7 +158,7 @@ STATIONS.forEach((st) => {
   const b = document.createElement('button'); b.dataset.id = st.id; b.setAttribute('role', 'tab');
   b.innerHTML = '<img alt="" loading="lazy"><span></span>'; b.firstChild.src = st.thumb; b.lastChild.textContent = st.short; b.onclick = () => show(st); thumbs.appendChild(b);
 });
-function zoom(k) { camera.fov = Math.max(26, Math.min(96, camera.fov * k)); camera.updateProjectionMatrix(); }
+function zoom(k) { camera.fov = Math.max(26, Math.min(baseFov() + 14, camera.fov * k)); camera.updateProjectionMatrix(); }
 
 // ---- phone motion (optional)
 const gyroBtn = $('#gyro'); let gyroOn = false, dev = null, gyroOffset = null;
