@@ -208,9 +208,10 @@ function loadFrames(r, fromEnd) {
   (function next() {
     while (live < 8 && i < order.length) {
       const k = order[i++]; if (r.imgs[k]) continue;
-      live++; const im = new Image(); im.decoding = 'async'; r.imgs[k] = im;
-      im.onload = () => { r.ok[k] = 1; live--; next(); }; im.onerror = () => { r.ok[k] = 2; live--; next(); };
-      im.src = r.dir + '/' + String(k + 1).padStart(4, '0') + '.' + r.ext;
+      live++; const im = new Image(); im.decoding = 'async'; r.imgs[k] = im; const url = r.dir + '/' + String(k + 1).padStart(4, '0') + '.' + r.ext; let tries = 0;
+      im.onload = () => { r.ok[k] = 1; live--; next(); };
+      im.onerror = () => { if (++tries < 4) return setTimeout(() => { im.src = url + '?r=' + tries; }, 500 * tries); r.ok[k] = 2; live--; next(); };   // the host sometimes answers 503 under a burst
+      im.src = url;
     }
   })();
 }
@@ -260,7 +261,7 @@ const stick = { x: 0, y: 0 }, keys = new Set(); let joyId = null;
 const inY = () => Math.max(-1, Math.min(1, stick.y + ((keys.has('ArrowUp') || keys.has('w')) ? 1 : 0) - ((keys.has('ArrowDown') || keys.has('s')) ? 1 : 0)));
 const inX = () => Math.max(-1, Math.min(1, stick.x + ((keys.has('ArrowRight') || keys.has('d')) ? 1 : 0) - ((keys.has('ArrowLeft') || keys.has('a')) ? 1 : 0)));
 function joyMove(e) { const b = joy.getBoundingClientRect(), R = 34; let dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2); const m = Math.hypot(dx, dy); if (m > R) { dx *= R / m; dy *= R / m; } stick.x = dx / R; stick.y = -dy / R; if (Math.abs(stick.x) < 0.22) stick.x = 0; if (Math.abs(stick.y) < 0.18) stick.y = 0; knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; }
-joy.addEventListener('pointerdown', (e) => { e.preventDefault(); joyId = e.pointerId; joy.setPointerCapture(joyId); joyMove(e); });
+joy.addEventListener('pointerdown', (e) => { e.preventDefault(); joyId = e.pointerId; try { joy.setPointerCapture(joyId); } catch (err) {} joyMove(e); });
 joy.addEventListener('pointermove', (e) => { if (e.pointerId === joyId) joyMove(e); });
 for (const ev of ['pointerup', 'pointercancel']) joy.addEventListener(ev, (e) => { if (e.pointerId !== joyId) return; joyId = null; stick.x = stick.y = 0; knob.style.transform = ''; });
 addEventListener('keydown', (e) => {
