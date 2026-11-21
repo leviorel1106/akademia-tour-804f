@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>וילה בקיסריה | סיור</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0d10; color: #f2eee6; font-family: 'Rubik', Arial, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; background: #0c0d10; font-size: 1.1rem; z-index: 9; transition: opacity .6s; }
+  #load.off { opacity: 0; pointer-events: none; }
+  #load b { background: linear-gradient(90deg, #a16cff, #2bd7d6); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
+  .ui { position: fixed; top: max(12px, env(safe-area-inset-top)); inset-inline: 12px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 5; pointer-events: none; }
+  .ui button { pointer-events: auto; font: inherit; font-size: .9rem; font-weight: 500; color: #0c0d10; background: #f2eee6; border: 0; border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+  .ui button.alt { background: rgba(12, 13, 16, .72); color: #f2eee6; border: 1px solid #3b3d40; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .ui button.on { background: linear-gradient(90deg, #a16cff, #2bd7d6); color: #0c0d10; border: 0; }
+  .hint { position: fixed; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: rgba(12, 13, 16, .72); border: 1px solid #3b3d40; border-radius: 999px; padding: 7px 16px; font-size: .82rem; z-index: 5; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); white-space: nowrap; }
+  .joy { position: fixed; bottom: max(26px, env(safe-area-inset-bottom)); width: 108px; height: 108px; border-radius: 50%; background: rgba(12, 13, 16, .45); border: 1px solid rgba(242, 238, 230, .35); z-index: 6; display: none; touch-action: none; }
+  .joy i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px; border-radius: 50%; background: rgba(242, 238, 230, .85); }
+  .joy small { position: absolute; left: 0; right: 0; top: -24px; text-align: center; font-size: .76rem; font-weight: 700; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+  #jm { right: 22px; } #jl { left: 22px; }
+  @media (pointer: coarse) { .joy { display: block; } .hint { display: none; } }
+</style>
+</head>
+<body>
+<div id="load"><div>טוען את <b>הווילה בקיסריה</b>…</div></div>
+<div class="ui">
+  <button id="tour">סיור מודרך</button>
+  <button class="alt" data-go="deck">דק</button><button class="alt" data-go="pool">בריכה</button><button class="alt" data-go="pergola">פרגולה</button><button class="alt" data-go="living">סלון</button>
+</div>
+<div class="hint">גרירה להביט · חיצים או WASD ללכת</div>
+<div class="joy" id="jm"><small>הליכה</small><i></i></div>
+<div class="joy" id="jl"><small>מבט</small><i></i></div>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Water } from './lib/Water.js';
+
+// The model is measured as in Blender: x along the house, y from the sea (negative) toward the land, z up. B() turns such a point into the page's own axes.
+const B = (x, y, z) => new THREE.Vector3(x, z, -y);
+const CFG = await (await fetch('scene.json?' + Date.now(), { cache: 'no-store' })).json(); const V = '?v=' + CFG.v; const LMAX = CFG.lmax.toFixed(1); window.__dbg = { cfg: CFG };
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(66, innerWidth / innerHeight, 0.06, 26000);
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.AgXToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.prepend(renderer.domElement);
+const tl = new THREE.TextureLoader();
+const tex = (u, o = {}) => new Promise((ok, no) => tl.load(u + V, (t) => { t.flipY = o.flipY ?? false; t.colorSpace = THREE.NoColorSpace; t.anisotropy = 8; if (o.wrap) t.wrapS = t.wrapT = THREE.RepeatWrapping; ok(t); }, undefined, no));
+// Every picture holds real light: stored value = (light / LMAX) ^ (1 / 2.4). DEC turns it back into light; the camera exposure and film curve come at the very end.
+const DEC = `vec3 dec(vec3 c) { return pow(c, vec3(2.4)) * ${LMAX}; }`;
+const PANO = `uniform sampler2D tPano; vec3 pano(vec3 d) { d = normalize(d); return (${(CFG.pano.lmax / CFG.lmax).toFixed(4)}) * dec(texture2D(tPano, vec2(0.5 + atan(d.x, -d.z) / 6.28318530718, 0.5 + asin(clamp(d.y, -1.0, 1.0)) / 3.14159265359)).rgb); }`;
+const VS = `varying vec2 vUv; varying vec3 vW; void main() { vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const baked = (map, grain, k) => new THREE.ShaderMaterial({ uniforms: { map: { value: map }, tN: { value: null }, uK: { value: k } }, vertexShader: VS, fragmentShader: `varying vec2 vUv; varying vec3 vW; uniform sampler2D map; uniform sampler2D tN; uniform float uK; ${DEC}
+  void main() { vec3 c = dec(texture2D(map, vUv).rgb) * uK;
+    ${grain ? 'vec3 g = texture2D(tN, vW.xz * 0.37).rgb + texture2D(tN, vW.xz * 1.9 + 0.31).rgb; c *= 0.62 + 0.38 * (g.r + g.g) * 0.5 + 0.1 * (g.b - 1.0);' : ''}      // the land's map is coarse (one map for 500 m): sand grain is added here so the ground by the deck is not a blur
+    gl_FragColor = vec4(c, 1.0); }` });
+
+const [tPano, tWn, gltf] = await Promise.all([tex('pano.jpg', { flipY: true }), tex('waternormals.jpg', { wrap: true, flipY: true }), new Promise((ok, no) => { const l = new GLTFLoader(); const d = new DRACOLoader(); d.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/'); l.setDRACOLoader(d); l.load('villa.glb' + V, ok, undefined, no); })]);
+tPano.wrapS = THREE.RepeatWrapping; tPano.generateMipmaps = false; tPano.minFilter = THREE.LinearFilter;
+const maps = {}; await Promise.all(Object.entries(CFG.maps).map(async ([k, u]) => { maps[k] = await tex(u); }));
+const sun = B(...CFG.sun).normalize(); const L = CFG.light || { sun: [1.2, 0.8, 0.5], amb: [0.25, 0.28, 0.35] };
+
+// the far world: the 360 picture rendered from the middle of the deck, always centred on the visitor
+const sky = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, uniforms: { tPano: { value: tPano } },
+  vertexShader: `varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `varying vec3 vD; ${DEC} ${PANO} void main() { gl_FragColor = vec4(pano(vD), 1.0); }` }));
+sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
+
+// leaves: each leaf card carries its colour; the page lights it with the same sun and sky as the baked surfaces, a little light passes through against the sun, and a shrub is darker toward its heart
+const leafMat = (inst) => new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { uSun: { value: sun }, uS: { value: new THREE.Vector3(...L.sun) }, uA: { value: new THREE.Vector3(...L.amb).multiplyScalar(3.2) } },
+  vertexShader: `attribute vec4 color; varying vec3 vC; varying vec3 vN; varying vec3 vW; varying float vH;
+    void main() { mat4 m = modelMatrix; ${inst ? 'm = m * instanceMatrix;' : ''} vec4 w = m * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(m) * normal); vC = color.rgb; vH = ${inst ? 'position.y' : '1.0'}; gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `varying vec3 vC; varying vec3 vN; varying vec3 vW; varying float vH; uniform vec3 uSun; uniform vec3 uS; uniform vec3 uA;
+    void main() { vec3 n = normalize(vN); float d = dot(n, uSun); float inside = step(0.0, -vW.z) * step(vW.z, -0.0) + step(vW.z, 0.0) * step(-8.0, vW.z) * step(abs(vW.x), 11.0) * step(vW.y, 3.3);
+      float lit = max(d, 0.0) * 0.85 + max(-d, 0.0) * 0.4; float ao = mix(0.35, 1.0, smoothstep(0.0, 0.42, vH));
+      vec3 c = vC * (uA * (0.75 + 0.25 * n.y) * ao + uS * lit * ao * (1.0 - inside) * 0.8) * mix(1.0, 0.55, inside);
+      gl_FragColor = vec4(c, 1.0); }` });
+const glassMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { tPano: { value: tPano } },
+  vertexShader: `varying vec3 vW; varying vec3 vN; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `varying vec3 vW; varying vec3 vN; ${DEC} ${PANO} void main() { vec3 v = normalize(vW - cameraPosition); vec3 n = normalize(vN); if (dot(n, v) > 0.0) n = -n; float f = 0.05 + 0.95 * pow(1.0 - max(dot(-v, n), 0.0), 5.0); gl_FragColor = vec4(pano(reflect(v, n)) * 0.9, clamp(f, 0.06, 0.9)); }` });
+
+const protos = {};
+gltf.scene.traverse((o) => { if (!o.isMesh) return; const n = o.name;
+  if (maps[n]) { o.material = baked(maps[n], n === 'LAND', (CFG.mapmax?.[n] ?? CFG.lmax) / CFG.lmax); o.material.uniforms.tN.value = tWn; } else if (n === 'GLASS') { o.material = glassMat; o.renderOrder = 5; } else if (n === 'FOL') o.material = leafMat(false); else if (n.startsWith('proto_')) { protos[n.slice(6)] = o; o.visible = false; } });
+scene.add(gltf.scene);
+// the shrubs by the deck: real leaves, copied; the scrub of the open land and the cypresses: two crossed pictures each
+const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler();
+for (const [key, p] of Object.entries(protos)) { const list = CFG.plants.filter((q) => q.d === 'mesh' && q.k + q.i === key); if (!list.length) continue;
+  const im = new THREE.InstancedMesh(p.geometry, leafMat(true), list.length); list.forEach((q, i) => { E.set(0, q.r, 0); Q.setFromEuler(E); M4.compose(B(...q.p), Q, new THREE.Vector3(q.s, q.sz, q.s)); im.setMatrixAt(i, M4); }); im.frustumCulled = false; scene.add(im); }
+const cross = (() => { const g = new THREE.BufferGeometry(); const P = [], U = [], I = []; for (let k = 0; k < 2; k++) { const c = Math.cos(k * Math.PI / 2 + 0.4), s = Math.sin(k * Math.PI / 2 + 0.4); const b = P.length / 3; for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) { P.push((u - 0.5) * c, v, (u - 0.5) * s); U.push(u, v); } I.push(b, b + 1, b + 2, b, b + 2, b + 3); }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setIndex(I); return g; })();
+const spriteMat = (t) => new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { map: { value: t } }, vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `varying vec2 vUv; uniform sampler2D map; ${DEC} void main() { vec4 t = texture2D(map, vUv); if (t.a < 0.5) discard; gl_FragColor = vec4(dec(t.rgb), 1.0); }` });
+const sprites = {}; await Promise.all(Object.entries(CFG.sprites).map(async ([k, u]) => { sprites[k] = await tex(u, { flipY: true }); }));
+for (const [key, t] of Object.entries(sprites)) { let list;
+  if (key === 'cypress') list = CFG.cypress.map(([x, y, z, h]) => ({ p: [x, y, z - 0.3 * h / 8.2], w: 9.2 * h / 8.2, h: 9.2 * h / 8.2, r: x }));
+  else list = CFG.plants.filter((q) => q.d === 'sprite' && (sprites[q.k + q.i] ? q.k + q.i : q.k + '0') === key).map((q) => ({ p: [q.p[0], q.p[1], q.p[2] - 0.39 * q.s], w: 1.5 * q.s, h: 1.5 * q.s, r: q.r }));
+  if (!list.length) continue; const im = new THREE.InstancedMesh(cross, spriteMat(t), list.length);
+  list.forEach((q, i) => { E.set(0, q.r, 0); Q.setFromEuler(E); M4.compose(B(...q.p), Q, new THREE.Vector3(q.w, q.h, q.w)); im.setMatrixAt(i, M4); }); im.frustumCulled = false; scene.add(im); }
+
+// the sea: a plane at sea level that mirrors the 360 sky through moving ripples; far out it fades into the sea of the 360 picture
+const sea = new THREE.Mesh(new THREE.PlaneGeometry(24000, 24000), new THREE.ShaderMaterial({ transparent: true, uniforms: { tPano: { value: tPano }, tN: { value: tWn }, uT: { value: 0 } }, vertexShader: VS,
+  fragmentShader: `varying vec3 vW; uniform sampler2D tN; uniform float uT; ${DEC} ${PANO}
+    void main() { vec3 v = normalize(vW - cameraPosition); float dist = length(vW - cameraPosition); vec2 p = vW.xz;
+      vec3 n = texture2D(tN, p * 0.021 + vec2(uT * 0.011, uT * 0.006)).xyz + texture2D(tN, p * 0.0053 - vec2(uT * 0.004, uT * 0.007)).xyz + texture2D(tN, p * 0.11 + vec2(-uT * 0.02, uT * 0.013)).xyz * 0.6 - 1.3;
+      vec3 N = normalize(vec3(n.x * 0.3, 1.0, n.y * 0.3) * vec3(1.0 / (1.0 + dist * 0.006), 1.0, 1.0 / (1.0 + dist * 0.006)));
+      vec3 r = reflect(v, N); r.y = abs(r.y) + 0.02; float f = 0.03 + 0.97 * pow(1.0 - max(dot(-v, N), 0.0), 5.0);
+      vec3 deep = vec3(0.010, 0.055, 0.065) * 1.6; vec3 c = mix(deep, pano(r), clamp(f, 0.0, 1.0));
+      gl_FragColor = vec4(c, 1.0 - smoothstep(900.0, 3500.0, dist)); }` }));
+sea.rotation.x = -Math.PI / 2; sea.position.set(0, -12.2, 0); sea.renderOrder = -5; scene.add(sea);
+// the pool: three's water (a true mirror of the scene, bent by moving ripples), let through a little so the plastered basin shows
+const [px0, px1, py0, py1] = CFG.pool;
+const pool = new Water(new THREE.PlaneGeometry(px1 - px0 + 0.04, py1 - py0 + 0.12), { textureWidth: 1024, textureHeight: 1024, waterNormals: tWn, sunDirection: sun.clone(), sunColor: new THREE.Color(...L.sun).multiplyScalar(0.5), waterColor: new THREE.Color(0.02, 0.16, 0.15), distortionScale: 0.22, fog: false, alpha: 0.86 });
+pool.rotation.x = -Math.PI / 2; pool.position.copy(B((px0 + px1) / 2, (py0 + py1) / 2 - 0.04, -0.058)); pool.material.uniforms.size.value = 38; pool.material.transparent = true; scene.add(pool);
+
+// camera feel: glow around what is very bright, the film curve (AgX, as in the Blender renders), a little contrast, darker corners, grain
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 }));
+composer.addPass(new RenderPass(scene, camera)); const bloom = new UnrealBloomPass(new THREE.Vector2(4, 4), 0.16, 0.6, 3.0); composer.addPass(bloom); composer.addPass(new OutputPass());
+const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } }, vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uT; uniform vec2 uRes; float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    void main() { vec3 c = max(texture2D(tDiffuse, vUv).rgb, 0.0); c = mix(c, c * c * (3.0 - 2.0 * c), 0.42); float l = dot(c, vec3(0.299, 0.587, 0.114)); c = mix(vec3(l), c, 1.08);
+      float v = length((vUv - 0.5) * vec2(1.0, uRes.y / uRes.x) * 1.45); c *= mix(1.0, 0.88, smoothstep(0.35, 0.95, v)); c += (hash(vUv * uRes + fract(uT) * 91.7) - 0.5) * 0.028 * (1.0 - 0.6 * l); gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0); }` }); composer.addPass(grade);
+function resize() { const pr = Math.min(devicePixelRatio, 2); renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); grade.uniforms.uRes.value.set(innerWidth * pr, innerHeight * pr); }
+addEventListener('resize', resize); resize();
+
+// where a visitor may stand: the deck and the living room, joined through the open part of the glass wall; everything solid is a rectangle or a circle to keep clear of
+const T = CFG.T, [qx0, qx1, qy0, qy1] = CFG.pit; const R = 0.28;
+const ZONES = [[-14.2, 14.2, -12.75, -T - 0.3], [-1.75, 2.35, -T - 0.4, 0.35], [-5.7, 10.7, 0.3, 7.25]];
+const BLOCK = [[px0 - 0.1, px1 + 0.1, py0 - 0.6, py1 + 0.1], [qx0 - 0.1, qx1 + 0.4, qy0 - 0.4, qy1 + 0.4], [-13.95, -13.05, -5.6, -1.1], [-12.75, -7.65, -4.55, -2.05], [-4.1, -1.85, -6.75, -4.45], [-14.15, -13.75, -5.95, -5.55], [-7.5, -7.1, -5.95, -5.55], [-14.15, -13.75, -1.15, -0.75], [-7.5, -7.1, -1.15, -0.75],
+  [-0.45, 4.2, 3.0, 5.4], [3.05, 4.2, 2.6, 5.4], [0.9, 2.65, 2.25, 3.5], [7.6, 9.6, 7.0, 7.3], [7.15, 8.85, 0.45, 1.05], [-3.0, 6.1, 7.05, 7.3]];
+const POSTS = [[-2.95, -1.8, 0.62], [5.95, -1.8, 0.62], [-6.6, -6.6, 0.62], [0.0, 1.6, 0.62], [1.8, 1.2, 0.62], [0.9, 1.3, 0.32], [-0.8, 5.5, 0.3], [-3.0, 1.0, 0.4], [9.9, 2.6, 0.45], [9.6, 1.0, 0.36], [-14.0, -7.2, 0.5], [-13.6, -8.1, 0.4], [13.6, -0.9, 0.55], [12.9, -0.8, 0.4]];
+const free = (x, y) => ZONES.some((z) => x > z[0] && x < z[1] && y > z[2] && y < z[3]) && !BLOCK.some((b) => x > b[0] - R && x < b[1] + R && y > b[2] - R && y < b[3] + R) && !POSTS.some((p) => Math.hypot(x - p[0], y - p[1]) < p[2] + R * 0.5);
+const SPOTS = { deck: [10.5, -6.8, 2.2, 0.0], pool: [13.2, -12.5, 1.25, -0.08], pergola: [-6.6, -3.3, 1.72, -0.05], living: [3.6, 6.6, 3.0, -0.03], shelf: [-1.6, 1.0, -0.6, -0.04] };
+let [px, py, yaw, pitch] = SPOTS.deck; let ev = -0.3;
+// yaw 0 looks toward the land (+y); it turns to the left as it grows
+const fwd = () => [-Math.sin(yaw), Math.cos(yaw)];
+function place() { camera.position.copy(B(px, py, 1.62)); const [fx, fy] = fwd(); const cp = Math.cos(pitch); camera.lookAt(B(px + fx * cp, py + fy * cp, 1.62 + Math.sin(pitch))); sky.position.copy(camera.position); }
+
+const cv = renderer.domElement; let drag = null; const keys = new Set(); const sticks = { jm: { x: 0, y: 0 }, jl: { x: 0, y: 0 } }; let tour = null;
+cv.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); stopTour(); });
+cv.addEventListener('pointermove', (e) => { if (!drag) return; yaw += (e.clientX - drag[0]) * 0.0038; pitch = Math.max(-1.2, Math.min(1.2, pitch + (e.clientY - drag[1]) * 0.0038)); drag = [e.clientX, e.clientY]; });
+for (const n of ['pointerup', 'pointercancel']) cv.addEventListener(n, () => { drag = null; });
+for (const id of ['jm', 'jl']) { const el = document.getElementById(id), knob = el.querySelector('i'); let pid = null;
+  const mv = (e) => { const r = el.getBoundingClientRect(); let x = (e.clientX - r.left - r.width / 2) / (r.width / 2), y = (e.clientY - r.top - r.height / 2) / (r.height / 2); const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } sticks[id].x = x; sticks[id].y = y; knob.style.transform = `translate(${x * 30}px, ${y * 30}px)`; };
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); pid = e.pointerId; try { el.setPointerCapture(pid); } catch (err) {} mv(e); stopTour(); });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) mv(e); });
+  for (const n of ['pointerup', 'pointercancel']) el.addEventListener(n, (e) => { if (e.pointerId !== pid) return; pid = null; sticks[id].x = sticks[id].y = 0; knob.style.transform = ''; }); }
+addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); if ('wasd'.includes(k) || k.startsWith('Arrow')) stopTour(); });
+addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key)); addEventListener('blur', () => keys.clear());
+for (const b of document.querySelectorAll('[data-go]')) b.onclick = () => { stopTour(); [px, py, yaw, pitch] = SPOTS[b.dataset.go]; };
+// the guided tour: a walk along fixed points, the look turning toward what each stretch is about
+const PATH = [[12.6, -6.9, 2.2], [6.0, -7.3, 2.6], [1.0, -7.5, 1.57], [-5.0, -7.5, 0.4], [-6.6, -3.4, 1.75], [-6.4, -2.6, -0.9], [-1.2, -2.8, -0.3], [-1.2, -0.2, -0.2], [-1.6, 1.4, -0.9], [-3.6, 5.6, -1.8], [1.5, 6.4, 3.1], [6.6, 6.2, 2.4], [6.6, 2.0, 1.2], [4.2, 0.75, 2.0], [2.1, 0.3, 2.9], [1.6, -1.0, 3.1], [0.8, -2.8, 3.14], [8.0, -7.2, 2.3], [12.6, -6.9, 2.2]];
+const tourBtn = document.getElementById('tour'); function stopTour() { if (tour !== null) { tour = null; tourBtn.classList.remove('on'); tourBtn.textContent = 'סיור מודרך'; } }
+tourBtn.onclick = () => { if (tour !== null) return stopTour(); tour = 0; tourBtn.classList.add('on'); tourBtn.textContent = 'עצור סיור'; };
+const lerpA = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
+
+let last = performance.now();
+function draw(t) { pool.material.uniforms.time.value = t * 0.00042; sea.material.uniforms.uT.value = t * 0.001; grade.uniforms.uT.value = t * 0.001; composer.render(); }
+function frame(t) { const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  if (tour !== null) { const i = Math.floor(tour), a = PATH[i], b = PATH[(i + 1) % PATH.length]; const len = Math.max(0.5, Math.hypot(b[0] - a[0], b[1] - a[1])); tour += dt * 1.05 / len; const u = tour - i, s = u * u * (3 - 2 * u);
+    if (tour >= PATH.length - 1) tour = 0; px = a[0] + (b[0] - a[0]) * u; py = a[1] + (b[1] - a[1]) * u; yaw = lerpA(yaw, lerpA(a[2], b[2], s), Math.min(1, dt * 2.2)); pitch += (-0.03 - pitch) * Math.min(1, dt * 2); }
+  else { let mx = sticks.jm.x, my = -sticks.jm.y; if (keys.has('w') || keys.has('ArrowUp')) my += 1; if (keys.has('s') || keys.has('ArrowDown')) my -= 1; if (keys.has('d')) mx += 1; if (keys.has('a')) mx -= 1;
+    if (keys.has('ArrowLeft')) yaw += dt * 1.5; if (keys.has('ArrowRight')) yaw -= dt * 1.5; yaw -= sticks.jl.x * dt * 1.9; pitch = Math.max(-1.2, Math.min(1.2, pitch - sticks.jl.y * dt * 1.3));
+    const l = Math.hypot(mx, my); if (l > 0.01) { const sp = 2.3 * Math.min(1, l) * dt / l; const [fx, fy] = fwd(); const dx = (fx * my + fy * mx) * sp, dy = (fy * my - fx * mx) * sp; if (free(px + dx, py + dy)) { px += dx; py += dy; } else if (free(px + dx, py)) px += dx; else if (free(px, py + dy)) py += dy; } }
+  // the eye: outside it is exposed for the bright deck, inside it opens up; looking out from inside it closes part of the way again
+  const inn = Math.min(1, Math.max(0, (py + 0.6) / 2.2)); const [fx, fy] = fwd(); const out = Math.max(0, -fy) * inn; const target = -0.25 + inn * 1.5 - out * 0.75; ev += (target - ev) * Math.min(1, dt * 1.6); renderer.toneMappingExposure = Math.pow(2, ev);
+  place(); draw(t); requestAnimationFrame(frame); }
+place(); document.getElementById('load').classList.add('off'); requestAnimationFrame(frame);
+// for checking: jump anywhere, and lay many views side by side in one picture
+Object.assign(window.__dbg, { ready: true, PATH, go: (x, y, yw, pt = 0) => { stopTour(); px = x; py = y; yaw = yw; pitch = pt; }, free, info: () => renderer.info.render, set: (o) => { if (o.ev !== undefined) ev = o.ev; },
+  sheet: (poses, cols = 3, evs) => { document.getElementById('audit')?.remove(); const el = renderer.domElement, tw = Math.floor(el.width / cols), th = Math.floor(tw * el.height / el.width); const c = document.createElement('canvas'); c.id = 'audit'; c.width = tw * cols; c.height = th * Math.ceil(poses.length / cols);
+    c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:20'; const g = c.getContext('2d');
+    poses.forEach((p, i) => { [px, py, yaw, pitch] = p; const inn = Math.min(1, Math.max(0, (py + 0.6) / 2.2)); const [fx, fy] = fwd(); renderer.toneMappingExposure = Math.pow(2, -0.25 + inn * 1.5 - Math.max(0, -fy) * inn * 0.75); place(); draw(performance.now()); g.drawImage(el, (i % cols) * tw, Math.floor(i / cols) * th, tw, th); g.fillStyle = '#fff'; g.font = '14px monospace'; g.fillText(p.map((v) => v.toFixed(1)).join(' '), (i % cols) * tw + 6, Math.floor(i / cols) * th + 16); });
+    document.body.appendChild(c); return poses.length; }, clear: () => document.getElementById('audit')?.remove() });
+</script>
+</body>
+</html>
