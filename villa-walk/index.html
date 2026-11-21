@@ -69,8 +69,8 @@ let last = performance.now();
 function tick(t) { const dt = Math.min(0.1, (t - last) / 1000); last = t; input = -jy; if (keys.has('w') || keys.has('ArrowUp')) input += 1; if (keys.has('s') || keys.has('ArrowDown')) input -= 1; input = Math.max(-1, Math.min(1, input));
   const want = auto ? 1 : input; vel += (want - vel) * Math.min(1, dt * 6); pos = Math.max(0, Math.min(total - 1, pos + vel * FPS * dt)); if (auto && pos >= total - 1) setAuto(false); draw(); requestAnimationFrame(tick); }
 const bar = document.querySelector('#load .bar i'); await loadLeg(0, (p) => { bar.style.width = (100 * p) + '%'; }); document.getElementById('load').classList.add('off'); requestAnimationFrame(tick);
+window.__dbg = { ready: true, go: (p) => { pos = p; }, got, total, starts };
 for (let k = 1; k < LEGS.length; k++) await loadLeg(k);
-window.__dbg = { ready: true, go: (p) => { pos = p; }, got, total };
 </script>
 </body>
 </html>
