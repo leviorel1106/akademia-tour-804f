@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>הליכה חופשית בדירה · שכונת האקדמיה</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800;900&display=swap">
+<style>
+  :root { --p:#175fa1; --deep:#12335c; --glass:rgba(255,255,255,.92); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body { margin:0; background:#e9e7e2; font-family:"Heebo",system-ui,sans-serif; overflow:hidden; overscroll-behavior:none; color:#1b1c1f; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+  .top { position:fixed; top:max(12px, env(safe-area-inset-top)); inset-inline:12px; display:flex; z-index:5; pointer-events:none; }
+  .pill { pointer-events:auto; background:var(--glass); border-radius:16px; padding:9px 14px; box-shadow:0 6px 24px rgba(10,25,45,.22); font-size:.9rem; line-height:1.45; max-width:min(560px, 100%); }
+  .pill b { color:var(--p); font-weight:800; }
+  .pill button { border:0; background:var(--p); color:#fff; font:700 .82rem "Heebo",sans-serif; border-radius:999px; padding:6px 13px; cursor:pointer; margin:4px 0 0 6px; }
+  .pill button.alt { background:#fff; color:var(--p); box-shadow:inset 0 0 0 2px var(--p); }
+  #load { position:fixed; inset:0; z-index:6; display:grid; place-items:center; background:#0e1a2b; color:#fff; font-weight:700; text-align:center; padding:20px; transition:opacity .5s ease; }
+  #load.off { opacity:0; pointer-events:none; }
+  #load span { display:block; font-weight:500; opacity:.75; margin-top:6px; font-size:.9rem; }
+  .joy { position:fixed; z-index:6; bottom:max(26px, env(safe-area-inset-bottom)); width:112px; height:112px; border-radius:50%; background:rgba(18,51,92,.28); border:2px solid rgba(255,255,255,.9); box-shadow:0 6px 24px rgba(10,25,45,.35); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); touch-action:none; cursor:grab; }
+  .joy i { position:absolute; left:50%; top:50%; width:48px; height:48px; margin:-24px 0 0 -24px; border-radius:50%; background:#fff; box-shadow:0 3px 12px rgba(0,0,0,.35); will-change:transform; }
+  .joy small { position:absolute; left:0; right:0; top:-26px; text-align:center; color:#fff; font-size:.78rem; font-weight:700; text-shadow:0 1px 4px rgba(0,0,0,.8); }
+  #jm { left:26px; } #jl { right:26px; }
+</style>
+</head>
+<body>
+<div id="load"><div>טוען את הדירה…<span id="lmsg"></span></div></div>
+<div class="top">
+  <div class="pill"><b>הליכה חופשית בדירה.</b> ג׳ויסטיק שמאלי או W A S D כדי ללכת, גרירה או ג׳ויסטיק ימני כדי להסתכל. אזורים אפורים הם מה שהמצלמה עוד לא צילמה.<br>
+    <button id="home">לנקודת ההתחלה</button><button id="door" class="alt">לכניסה מהמרפסת</button><button id="wall" class="alt">בלי גבולות: <span id="wst">כבוי</span></button></div>
+</div>
+<div class="joy" id="jm"><small>הליכה</small><i></i></div>
+<div class="joy" id="jl"><small>מבט</small><i></i></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+// CFG comes from build_world.py: the points file, where the visitor starts, the floor height and the box they may walk in
+const CFG = {"url": "points.bin?b=21085552", "start": [2.592, 1.951, 4.477], "yaw": 2.307, "floor": -0.002, "eye": 1.952, "box": [-2.49, 0.5, -2.01, 7.95, 2.3, 9.55], "speed": 1.3, "path": [[10.19, 2.27, -3.65], [8.39, 2.21, -1.69], [7.12, 2.06, -0.12], [6.09, 1.85, 1.12], [5.26, 1.78, 1.97], [4.46, 1.84, 2.64], [3.71, 1.9, 3.3], [3.13, 1.93, 3.89], [2.72, 1.95, 4.33]]};
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe9e7e2);
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 200);
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;            // the colours in the file are already display colours
+document.body.prepend(renderer.domElement);
+const mat = new THREE.ShaderMaterial({
+  uniforms: { uScale: { value: 1 } },
+  vertexShader: `attribute vec3 color; attribute float size; uniform float uScale; varying vec3 vC;
+    void main() { vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = clamp(size * uScale / max(0.05, -mv.z), 1.0, 96.0); }`,
+  fragmentShader: `varying vec3 vC; void main() { vec2 d = gl_PointCoord - 0.5; if (dot(d, d) > 0.25) discard; gl_FragColor = vec4(vC, 1.0); }`,
+});
+const load = document.querySelector('#load'), lmsg = document.querySelector('#lmsg');
+(async () => {
+  try {
+    const res = await fetch(CFG.url); const total = +res.headers.get('content-length') || 0; const reader = res.body.getReader(); const parts = []; let got = 0;
+    for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length; if (total) lmsg.textContent = Math.round(100 * got / total) + '%'; }
+    const buf = new Uint8Array(got); let o = 0; for (const p of parts) { buf.set(p, o); o += p.length; }
+    const dv = new DataView(buf.buffer); const hl = dv.getUint32(0, true); const head = JSON.parse(new TextDecoder().decode(buf.subarray(4, 4 + hl))); const n = head.n; let off = 4 + hl;
+    const q = new Uint16Array(buf.buffer.slice(off, off + n * 6)); off += n * 6; const col = buf.subarray(off, off + n * 3); off += n * 3; const sz = buf.subarray(off, off + n);
+    const pos = new Float32Array(n * 3), size = new Float32Array(n); const s = [0, 1, 2].map((k) => (head.hi[k] - head.lo[k]) / 65535);
+    for (let i = 0; i < n; i++) { pos[3 * i] = head.lo[0] + q[3 * i] * s[0]; pos[3 * i + 1] = head.lo[1] + q[3 * i + 1] * s[1]; pos[3 * i + 2] = head.lo[2] + q[3 * i + 2] * s[2]; size[i] = sz[i] / 1000; }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3, true)); g.setAttribute('size', new THREE.BufferAttribute(size, 1));
+    const pts = new THREE.Points(g, mat); pts.frustumCulled = false; scene.add(pts); load.classList.add('off'); window.__dbg.n = n;
+  } catch (e) { lmsg.textContent = 'הקובץ לא נטען. נסו לרענן.'; }
+})();
+camera.rotation.order = 'YXZ';
+let yaw = CFG.yaw, pitch = 0, free = false; const pos = new THREE.Vector3(...CFG.start);
+const eye = () => { pos.y = CFG.floor + CFG.eye; };
+function go(p, y) { pos.set(...p); yaw = y; pitch = 0; eye(); }
+document.querySelector('#home').onclick = () => go(CFG.start, CFG.yaw);
+document.querySelector('#door').onclick = () => { const a = CFG.path[Math.min(3, CFG.path.length - 1)], b = CFG.start; go(a, Math.atan2(-(b[0] - a[0]), -(b[2] - a[2]))); };
+document.querySelector('#wall').onclick = () => { free = !free; document.querySelector('#wst').textContent = free ? 'פועל' : 'כבוי'; };
+eye();
+const cv = renderer.domElement; let drag = null;
+cv.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', (e) => { if (!drag) return; yaw -= (e.clientX - drag[0]) * 0.004; pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY - drag[1]) * 0.004)); drag = [e.clientX, e.clientY]; });
+for (const ev of ['pointerup', 'pointercancel']) cv.addEventListener(ev, () => { drag = null; });
+const sticks = { jm: { x: 0, y: 0 }, jl: { x: 0, y: 0 } };
+for (const id of ['jm', 'jl']) {
+  const el = document.getElementById(id), knob = el.lastElementChild; let pid = null;
+  const mv = (e) => { const b = el.getBoundingClientRect(), R = 34; let dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2); const m = Math.hypot(dx, dy); if (m > R) { dx *= R / m; dy *= R / m; } sticks[id].x = dx / R; sticks[id].y = -dy / R; knob.style.transform = `translate(${dx}px,${dy}px)`; };
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); pid = e.pointerId; try { el.setPointerCapture(pid); } catch (err) {} mv(e); });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) mv(e); });
+  for (const ev of ['pointerup', 'pointercancel']) el.addEventListener(ev, (e) => { if (e.pointerId !== pid) return; pid = null; sticks[id].x = sticks[id].y = 0; knob.style.transform = ''; });
+}
+const keys = new Set();
+addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); });
+addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+addEventListener('blur', () => keys.clear());
+const has = (...k) => k.some((x) => keys.has(x)) ? 1 : 0;
+function resize() { const pr = Math.min(devicePixelRatio, 1.5); renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.fov = innerWidth < innerHeight ? 90 : 72; camera.updateProjectionMatrix(); mat.uniforms.uScale.value = innerHeight * pr / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))); }
+addEventListener('resize', resize); resize();
+let last = performance.now();
+renderer.setAnimationLoop((now) => {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  yaw -= (sticks.jl.x + has('ArrowRight') - has('ArrowLeft')) * 1.4 * dt; pitch = Math.max(-1.3, Math.min(1.3, pitch + sticks.jl.y * 1.0 * dt));
+  const f = sticks.jm.y + has('w', 'ArrowUp') - has('s', 'ArrowDown'), r = sticks.jm.x + has('d') - has('a'), u = has('e') - has('q');
+  const sp = CFG.speed * (keys.has('Shift') ? 2.2 : 1);
+  pos.x += (-Math.sin(yaw) * f + Math.cos(yaw) * r) * sp * dt; pos.z += (-Math.cos(yaw) * f - Math.sin(yaw) * r) * sp * dt; pos.y += u * sp * 0.6 * dt;
+  if (!free && CFG.box) { pos.x = Math.max(CFG.box[0], Math.min(CFG.box[3], pos.x)); pos.y = Math.max(CFG.box[1], Math.min(CFG.box[4], pos.y)); pos.z = Math.max(CFG.box[2], Math.min(CFG.box[5], pos.z)); }
+  camera.position.copy(pos); camera.rotation.set(pitch, yaw, 0);
+  renderer.render(scene, camera);
+});
+window.__dbg = { pos, camera, get yaw() { return yaw; }, set yaw(v) { yaw = v; }, set pitch(v) { pitch = v; }, go };
+</script>
+</body>
+</html>
