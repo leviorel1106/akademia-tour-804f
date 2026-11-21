@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>וילה קיסריה · מבחני סיכון</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap">
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body { margin:0; background:#0c0d10; font-family:"Rubik",system-ui,sans-serif; overflow:hidden; overscroll-behavior:none; color:#f5f5f5; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+  .top { position:fixed; top:max(12px, env(safe-area-inset-top)); inset-inline:12px; display:flex; z-index:5; pointer-events:none; }
+  .pill { pointer-events:auto; background:rgba(12,13,16,.82); border:1px solid #3b3d40; border-radius:16px; padding:10px 14px; font-size:.9rem; line-height:1.5; max-width:min(600px, 100%); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+  .pill b { background:linear-gradient(97deg,#a16cff,#2bd7d6); -webkit-background-clip:text; background-clip:text; color:transparent; font-weight:800; }
+  .pill button { border:0; background:#f2eee6; color:#111418; font:700 .82rem "Rubik",sans-serif; border-radius:999px; padding:6px 13px; cursor:pointer; margin:6px 0 0 6px; }
+  #load { position:fixed; inset:0; z-index:6; display:grid; place-items:center; background:#0c0d10; font-weight:700; transition:opacity .5s ease; }
+  #load.off { opacity:0; pointer-events:none; }
+  .joy { position:fixed; z-index:6; bottom:max(26px, env(safe-area-inset-bottom)); width:112px; height:112px; border-radius:50%; background:rgba(12,13,16,.3); border:2px solid rgba(255,255,255,.85); touch-action:none; cursor:grab; }
+  .joy i { position:absolute; left:50%; top:50%; width:48px; height:48px; margin:-24px 0 0 -24px; border-radius:50%; background:#fff; will-change:transform; }
+  .joy small { position:absolute; left:0; right:0; top:-26px; text-align:center; font-size:.78rem; font-weight:700; text-shadow:0 1px 4px rgba(0,0,0,.8); }
+  #jm { left:26px; } #jl { right:26px; }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="load">טוען את המבחן…</div>
+<div class="top"><div class="pill"><b>מבחני סיכון לווילה.</b> זה לא העיצוב: הבית כאן הוא קופסה אפורה. בודקים רק שלושה דברים: מים שנעים, ים ושמיים באופק, וצמחים ורהיט מוכן מקרוב. W A S D או הג׳ויסטיק כדי ללכת, גרירה כדי להסתכל.<br>
+  <button id="p1">שפת הבריכה</button><button id="p2">מהסלון החוצה</button><button id="p3">ליד הצמחים</button><button id="p4">ליד הספה</button></div></div>
+<div class="joy" id="jm"><small>הליכה</small><i></i></div>
+<div class="joy" id="jl"><small>מבט</small><i></i></div>
+<script type="module">
+// Risk tests for the walkable villa, before anything is designed or paid for: (1) moving water in the pool, with the house reflected in it,
+// (2) sea and sky as the far layer at golden hour, (3) plants and ready-made CC0 furniture (Poly Haven) seen from close. Grey-box house on the plan's measures.
+import * as THREE from 'three';
+import { Water } from 'three/addons/objects/Water.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.42; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.05, 6000);
+// ---- sun, sky, light. The sea is toward +z; the sun stands low over it, a little to the left
+const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 7), THREE.MathUtils.degToRad(-22));
+const sky = new Sky(); sky.scale.setScalar(4500); scene.add(sky);
+Object.assign(sky.material.uniforms, {}); sky.material.uniforms.turbidity.value = 8.5; sky.material.uniforms.rayleigh.value = 3.0; sky.material.uniforms.mieCoefficient.value = 0.006; sky.material.uniforms.mieDirectionalG.value = 0.86; sky.material.uniforms.sunPosition.value.copy(sun);
+const pm = new THREE.PMREMGenerator(renderer); const envScene = new THREE.Scene(); const sky2 = sky.clone(); envScene.add(sky2); scene.environment = pm.fromScene(envScene).texture;
+const sunLight = new THREE.DirectionalLight(0xffd2a0, 4.2); sunLight.position.copy(sun).multiplyScalar(60); sunLight.castShadow = true; sunLight.shadow.mapSize.set(4096, 4096);
+Object.assign(sunLight.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 160 }); sunLight.shadow.bias = -0.0004; sunLight.shadow.normalBias = 0.03; scene.add(sunLight);
+scene.add(new THREE.HemisphereLight(0xbcd3ff, 0x8a7a66, 0.55));
+// ---- materials made here
+function planks() { const c = document.createElement('canvas'); c.width = 512; c.height = 512; const g = c.getContext('2d');
+  for (let i = 0; i < 8; i++) { const v = 118 + Math.random() * 26; g.fillStyle = `rgb(${v + 20},${v + 4},${v - 16})`; g.fillRect(0, i * 64, 512, 64); for (let k = 0; k < 90; k++) { g.fillStyle = `rgba(60,45,30,${Math.random() * 0.12})`; g.fillRect(Math.random() * 512, i * 64 + Math.random() * 64, 40 + Math.random() * 160, 1); } g.fillStyle = 'rgba(30,22,14,.8)'; g.fillRect(0, i * 64, 512, 2); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
+const teak = new THREE.MeshStandardMaterial({ map: planks(), roughness: 0.82 }); teak.map.repeat.set(7, 7);
+const plaster = new THREE.MeshStandardMaterial({ color: 0xefeae0, roughness: 0.95 }); const stone = new THREE.MeshStandardMaterial({ color: 0xd8c9b0, roughness: 0.6 });
+const kurkar = new THREE.MeshStandardMaterial({ color: 0xb8935a, roughness: 1 }); const wood = new THREE.MeshStandardMaterial({ color: 0x8a6238, roughness: 0.8 }); const dark = new THREE.MeshStandardMaterial({ color: 0x2a3b3c, roughness: 0.4 });
+const box = (m, x, y, z, w, h, d) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; scene.add(o); return o; };
+// ---- the place, on the plan's measures (metres; x along the house, z toward the sea, deck at y = 0)
+box(kurkar, 0, -6.2, -8, 90, 12, 44);                                   // the cliff under everything
+box(teak, -11, -0.1, 6.5, 6, 0.2, 13); box(teak, 13, -0.1, 6.5, 2, 0.2, 13); box(teak, 0, -0.1, 3.9, 28, 0.2, 7.8); box(teak, 0, -0.1, 12.65, 28, 0.2, 0.7);      // deck around the pool
+box(dark, 3, -1.5, 10.05, 18, 0.1, 4.5); box(dark, 3, -0.8, 7.85, 18.2, 1.5, 0.1); box(dark, -6.05, -0.8, 10.05, 0.1, 1.5, 4.5); box(dark, 12.05, -0.8, 10.05, 0.1, 1.5, 4.5); box(dark, 3, -0.86, 12.28, 18.2, 1.42, 0.08);      // pool basin, the sea side lower: the infinity edge
+box(stone, 0, -0.05, -4, 22, 0.1, 8);                                    // the stone floor inside
+box(plaster, 0, 1.6, -8, 22.4, 3.2, 0.4); box(plaster, -11, 1.6, -4, 0.4, 3.2, 8); box(plaster, 11, 1.6, -4, 0.4, 3.2, 8);      // back and side walls
+box(plaster, -6.5, 1.6, 0, 9, 3.2, 0.4); box(plaster, 8, 1.6, 0, 6, 3.2, 0.4); box(plaster, 1.5, 2.95, 0, 7, 0.5, 0.4); box(plaster, 0, 3.3, -4, 22.4, 0.2, 8.4);      // sea-side wall with the 7 m opening, roof
+box(plaster, 1.5, 4.9, -4.6, 15, 3, 5);                                  // the set-back upper floor
+for (const [x, z] of [[-13.6, 0.8], [-7.2, 0.8], [-13.6, 5.6], [-7.2, 5.6]]) box(wood, x, 1.4, z, 0.2, 2.8, 0.2);
+box(wood, -10.4, 2.85, 0.8, 6.8, 0.18, 0.16); box(wood, -10.4, 2.85, 5.6, 6.8, 0.18, 0.16);
+for (let i = 0; i < 30; i++) box(wood, -13.6 + i * 0.221, 3.0, 3.2, 0.07, 0.1, 5.4);      // the slats: striped shadow on the deck
+box(wood, -10.4, 0.74, 3.2, 3.4, 0.06, 1.05); for (const [x, z] of [[-11.9, 2.8], [-8.9, 2.8], [-11.9, 3.6], [-8.9, 3.6]]) box(wood, x, 0.36, z, 0.08, 0.72, 0.08);      // the long table
+// ---- water. The same object for pool and sea: a mirror of the scene, bent by moving normals
+const wn = new THREE.TextureLoader().load('assets/waternormals.jpg', (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; });
+const pool = new Water(new THREE.PlaneGeometry(18, 4.4), { textureWidth: 1024, textureHeight: 1024, waterNormals: wn, sunDirection: sun.clone(), sunColor: 0xfff0d0, waterColor: 0x2fb5ac, distortionScale: 0.2, fog: false });
+pool.rotation.x = -Math.PI / 2; pool.position.set(3, -0.06, 10.05); pool.material.uniforms.size.value = 42; scene.add(pool);
+const sea = new Water(new THREE.PlaneGeometry(9000, 9000), { textureWidth: 512, textureHeight: 512, waterNormals: wn, sunDirection: sun.clone(), sunColor: 0xffe2b0, waterColor: 0x0b3d4a, distortionScale: 2.6, fog: false });
+sea.rotation.x = -Math.PI / 2; sea.position.set(0, -12, 0); sea.material.uniforms.size.value = 1.7; scene.add(sea);
+// ---- ready-made things (Poly Haven, CC0): plants in pots, shrubs on the cliff edge, a sofa, an armchair, a table, a vase
+const gl = new GLTFLoader(); const put = (name, x, y, z, s = 1, ry = 0) => gl.loadAsync(`assets/${name}/${name}.gltf`).then((g) => { const o = g.scene; o.position.set(x, y, z); o.scale.setScalar(s); o.rotation.y = ry;
+  o.traverse((m) => { if (m.isMesh) { m.castShadow = m.receiveShadow = true; if (m.material.map) m.material.map.anisotropy = 8; if (m.material.alphaMap || m.material.transparent) { m.material.transparent = false; m.material.alphaTest = 0.45; m.material.side = THREE.DoubleSide; } } }); scene.add(o); return o; });
+const jobs = [put('planter_pot_clay', -2.8, 0, 0.9, 3.4), put('potted_plant_02', -2.8, 0.74, 0.9, 1.9), put('planter_pot_clay', 5.8, 0, 0.9, 3.4), put('potted_plant_02', 5.8, 0.74, 0.9, 1.9, 2),
+  put('shrub_02', 13.2, 0.25, 5, 0.55), put('shrub_04', 13.3, 0.2, 8.2, 0.6, 1), put('shrub_02', -13.3, 0.25, 9.4, 0.5, 2.2), put('shrub_04', 13.2, 0.2, 11.4, 0.55, 3),
+  put('sofa_03', 1.5, 0, -3.6, 1, Math.PI), put('modern_arm_chair_01', -1.4, 0, -1.9, 1, 2.2), put('modern_coffee_table_01', 1.5, 0, -2.1, 1, Math.PI / 2), put('ceramic_vase_03', 1.3, 0.39, -2.1, 1)];
+Promise.allSettled(jobs).then((r) => { document.querySelector('#load').classList.add('off'); window.__dbg.ready = true; window.__dbg.failed = r.filter((x) => x.status === 'rejected').length; });
+// ---- walking: on the deck (not in the pool), under the pergola, and inside through the opening
+const inside = (x, z) => x > -10.6 && x < 10.6 && z > -7.6 && z < -0.35; const onDeck = (x, z) => x > -13.7 && x < 13.7 && z > 0.35 && z < 12.6 && !(x > -6.6 && x < 12.6 && z > 7.3);
+const door = (x, z) => x > -1.8 && x < 4.8 && z > -0.5 && z < 0.5; const blocked = (x, z) => !(inside(x, z) || onDeck(x, z) || door(x, z));
+camera.rotation.order = 'YXZ'; let yaw = Math.PI, pitch = -0.08; const pos = new THREE.Vector3(2, 1.6, 5.2);
+const go = (x, z, y, p) => { pos.set(x, 1.6, z); yaw = y; pitch = p; };
+document.querySelector('#p1').onclick = () => go(2, 6.9, Math.PI, -0.32); document.querySelector('#p2').onclick = () => go(1.5, -5.2, Math.PI, -0.06);
+document.querySelector('#p3').onclick = () => go(11.6, 6.6, -1.9, -0.25); document.querySelector('#p4').onclick = () => go(1.2, -0.9, 0.1, -0.3);
+const cv = renderer.domElement; let drag = null;
+cv.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', (e) => { if (!drag) return; yaw -= (e.clientX - drag[0]) * 0.004; pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY - drag[1]) * 0.004)); drag = [e.clientX, e.clientY]; });
+for (const ev of ['pointerup', 'pointercancel']) cv.addEventListener(ev, () => { drag = null; });
+const sticks = { jm: { x: 0, y: 0 }, jl: { x: 0, y: 0 } };
+for (const id of ['jm', 'jl']) { const el = document.getElementById(id), knob = el.lastElementChild; let pid = null;
+  const mv = (e) => { const b = el.getBoundingClientRect(), R = 34; let dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2); const m = Math.hypot(dx, dy); if (m > R) { dx *= R / m; dy *= R / m; } sticks[id].x = dx / R; sticks[id].y = -dy / R; knob.style.transform = `translate(${dx}px,${dy}px)`; };
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); pid = e.pointerId; try { el.setPointerCapture(pid); } catch (err) {} mv(e); });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) mv(e); });
+  for (const ev of ['pointerup', 'pointercancel']) el.addEventListener(ev, (e) => { if (e.pointerId !== pid) return; pid = null; sticks[id].x = sticks[id].y = 0; knob.style.transform = ''; }); }
+const keys = new Set(); addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys.add(k); if (k.startsWith('Arrow')) e.preventDefault(); });
+addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key)); addEventListener('blur', () => keys.clear());
+const has = (...k) => k.some((x) => keys.has(x)) ? 1 : 0;
+function resize() { renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.fov = innerWidth < innerHeight ? 88 : 68; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+let last = performance.now();
+renderer.setAnimationLoop((now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  yaw -= (sticks.jl.x + has('ArrowRight') - has('ArrowLeft')) * 1.4 * dt; pitch = Math.max(-1.3, Math.min(1.3, pitch + sticks.jl.y * dt));
+  const f = sticks.jm.y + has('w', 'ArrowUp') - has('s', 'ArrowDown'), r = sticks.jm.x + has('d') - has('a'); const sp = 1.5 * (keys.has('Shift') ? 2.2 : 1);
+  const nx = pos.x + (-Math.sin(yaw) * f + Math.cos(yaw) * r) * sp * dt, nz = pos.z + (-Math.cos(yaw) * f - Math.sin(yaw) * r) * sp * dt;
+  if (!blocked(nx, pos.z)) pos.x = nx; if (!blocked(pos.x, nz)) pos.z = nz;
+  camera.position.copy(pos); camera.rotation.set(pitch, yaw, 0);
+  pool.material.uniforms.time.value = now * 0.0011; sea.material.uniforms.time.value = now * 0.0009;
+  renderer.render(scene, camera); });
+window.__dbg = { pos, camera, renderer, scene, go, get yaw() { return yaw; }, set yaw(v) { yaw = v; }, set pitch(v) { pitch = v; } };
+</script>
+</body>
+</html>
