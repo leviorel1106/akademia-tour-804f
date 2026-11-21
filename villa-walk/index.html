@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>וילה בקיסריה | סיור</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0d10; color: #f2eee6; font-family: 'Rubik', Arial, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; background: #0c0d10; z-index: 9; transition: opacity .6s; text-align: center; }
+  #load.off { opacity: 0; pointer-events: none; }
+  #load b { background: linear-gradient(90deg, #a16cff, #2bd7d6); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
+  #load .bar { width: 220px; height: 4px; border-radius: 4px; background: #262932; margin: 16px auto 0; overflow: hidden; }
+  #load .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #a16cff, #2bd7d6); }
+  .ui { position: fixed; top: max(12px, env(safe-area-inset-top)); inset-inline: 12px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 5; pointer-events: none; }
+  .ui button { pointer-events: auto; font: inherit; font-size: .9rem; font-weight: 500; color: #f2eee6; background: rgba(12, 13, 16, .72); border: 1px solid #3b3d40; border-radius: 999px; padding: 8px 16px; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .ui button.main { background: #f2eee6; color: #0c0d10; border: 0; }
+  .ui button.on { background: linear-gradient(90deg, #a16cff, #2bd7d6); color: #0c0d10; border: 0; }
+  .track { position: fixed; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 290px)); min-width: 180px; z-index: 5; direction: ltr; }
+  .track .line { position: relative; height: 4px; border-radius: 4px; background: rgba(242, 238, 230, .25); cursor: pointer; }
+  .track .line i { position: absolute; inset-block: 0; left: 0; width: 0; border-radius: 4px; background: linear-gradient(90deg, #a16cff, #2bd7d6); }
+  .track .line s { position: absolute; top: -3px; width: 2px; height: 10px; background: rgba(242, 238, 230, .6); }
+  .track p { margin: 8px 0 0; text-align: center; font-size: .82rem; direction: rtl; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+  .joy { position: fixed; bottom: max(26px, env(safe-area-inset-bottom)); right: 22px; width: 112px; height: 112px; border-radius: 50%; background: rgba(12, 13, 16, .45); border: 1px solid rgba(242, 238, 230, .35); z-index: 6; touch-action: none; }
+  .joy i { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; background: rgba(242, 238, 230, .88); }
+  .joy small { position: absolute; left: 0; right: 0; top: -24px; text-align: center; font-size: .76rem; font-weight: 700; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="load"><div>טוען את <b>הווילה בקיסריה</b>…<div class="bar"><i></i></div></div></div>
+<div class="ui"><button id="auto" class="main">סיור מודרך</button><button id="back">לתחילת המסלול</button></div>
+<div class="track"><div class="line" id="line"><i></i></div><p id="where"></p></div>
+<div class="joy" id="joy"><small>קדימה / אחורה</small><i></i></div>
+<script type="module">
+// The tour is real filmed footage: every leg of the route is a clip (240 pictures, 10 s). Nothing is drawn in 3D here.
+// Pushing forward plays the pictures forward, pulling back plays them backward, letting go stops on the exact picture.
+const CFG = await (await fetch('walk.json?' + Date.now(), { cache: 'no-store' })).json(); const V = '?v=' + CFG.v; const LEGS = CFG.legs; const FPS = 24;
+const starts = []; let total = 0; for (const l of LEGS) { starts.push(total); total += l.n; }
+const cv = document.getElementById('cv'), g = cv.getContext('2d'); const img = LEGS.map((l) => new Array(l.n)); const got = LEGS.map(() => 0);
+const url = (k, i) => `f/${LEGS[k].name}/${String(i + 1).padStart(4, '0')}.webp${V}`;
+function fetchFrame(k, i, tries = 3) { return new Promise((ok) => { const im = new Image(); im.decoding = 'async'; im.onload = () => { img[k][i] = im; got[k]++; ok(true); }; im.onerror = () => tries > 1 ? setTimeout(() => fetchFrame(k, i, tries - 1).then(ok), 400) : ok(false); im.src = url(k, i); }); }
+async function loadLeg(k, onp) { const q = [...Array(LEGS[k].n).keys()]; let done = 0; await Promise.all([...Array(8)].map(async () => { while (q.length) { await fetchFrame(k, q.shift()); onp && onp(++done / LEGS[k].n); } })); }
+let pos = 0, vel = 0, auto = false, input = 0; const keys = new Set();
+function resize() { const pr = Math.min(devicePixelRatio, 2); cv.width = innerWidth * pr; cv.height = innerHeight * pr; }
+addEventListener('resize', resize); resize();
+function frameAt(p) { p = Math.max(0, Math.min(total - 1, p)); let k = LEGS.length - 1; while (k > 0 && p < starts[k]) k--; return [k, Math.min(LEGS[k].n - 1, Math.floor(p - starts[k]))]; }
+function nearest(k, i) { for (let d = 0; d < 30; d++) { if (img[k][i - d]) return img[k][i - d]; if (img[k][i + d]) return img[k][i + d]; } return null; }
+function put(im, a) { if (!im) return; const s = Math.max(cv.width / im.naturalWidth, cv.height / im.naturalHeight), w = im.naturalWidth * s, h = im.naturalHeight * s; g.globalAlpha = a; g.drawImage(im, (cv.width - w) / 2, (cv.height - h) / 2, w, h); g.globalAlpha = 1; }
+function draw() { const [k, i] = frameAt(pos); put(nearest(k, i), 1);
+  const left = LEGS[k].n - 1 - i; if (k < LEGS.length - 1 && left < 8 && img[k + 1][0]) put(img[k + 1][0], 1 - left / 8);      // a leg ends on the picture the next one starts on; a short dissolve hides what differs between two takes
+  document.querySelector('#line i').style.width = (100 * pos / (total - 1)) + '%'; document.getElementById('where').textContent = LEGS[k].title; }
+const line = document.getElementById('line'); starts.slice(1).forEach((s) => { const m = document.createElement('s'); m.style.left = (100 * s / total) + '%'; line.appendChild(m); });
+line.addEventListener('pointerdown', (e) => { const r = line.getBoundingClientRect(); pos = (e.clientX - r.left) / r.width * (total - 1); setAuto(false); });
+const autoBtn = document.getElementById('auto'); function setAuto(v) { auto = v; autoBtn.classList.toggle('on', v); autoBtn.textContent = v ? 'עצור' : 'סיור מודרך'; }
+autoBtn.onclick = () => { if (!auto && pos > total - 3) pos = 0; setAuto(!auto); }; document.getElementById('back').onclick = () => { pos = 0; setAuto(false); };
+const joy = document.getElementById('joy'), knob = joy.querySelector('i'); let pid = null, jy = 0;
+const mv = (e) => { const r = joy.getBoundingClientRect(); jy = Math.max(-1, Math.min(1, (e.clientY - r.top - r.height / 2) / (r.height / 2))); knob.style.transform = `translate(0, ${jy * 32}px)`; };
+joy.addEventListener('pointerdown', (e) => { e.preventDefault(); pid = e.pointerId; try { joy.setPointerCapture(pid); } catch (err) {} mv(e); setAuto(false); });
+joy.addEventListener('pointermove', (e) => { if (e.pointerId === pid) mv(e); });
+for (const n of ['pointerup', 'pointercancel']) joy.addEventListener(n, (e) => { if (e.pointerId !== pid) return; pid = null; jy = 0; knob.style.transform = ''; });
+addEventListener('keydown', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys.add(k); if (k.startsWith('Arrow') || k === ' ') e.preventDefault(); if (k === ' ') autoBtn.click(); else if (['w', 's', 'ArrowUp', 'ArrowDown'].includes(k)) setAuto(false); });
+addEventListener('keyup', (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key)); addEventListener('blur', () => keys.clear());
+addEventListener('wheel', (e) => { pos += -e.deltaY * 0.06; setAuto(false); }, { passive: true });
+let drag = null; cv.addEventListener('pointerdown', (e) => { drag = e.clientY; cv.setPointerCapture(e.pointerId); setAuto(false); });
+cv.addEventListener('pointermove', (e) => { if (drag === null) return; pos += (drag - e.clientY) * 0.35; drag = e.clientY; }); for (const n of ['pointerup', 'pointercancel']) cv.addEventListener(n, () => { drag = null; });
+let last = performance.now();
+function tick(t) { const dt = Math.min(0.1, (t - last) / 1000); last = t; input = -jy; if (keys.has('w') || keys.has('ArrowUp')) input += 1; if (keys.has('s') || keys.has('ArrowDown')) input -= 1; input = Math.max(-1, Math.min(1, input));
+  const want = auto ? 1 : input; vel += (want - vel) * Math.min(1, dt * 6); pos = Math.max(0, Math.min(total - 1, pos + vel * FPS * dt)); if (auto && pos >= total - 1) setAuto(false); draw(); requestAnimationFrame(tick); }
+const bar = document.querySelector('#load .bar i'); await loadLeg(0, (p) => { bar.style.width = (100 * p) + '%'; }); document.getElementById('load').classList.add('off'); requestAnimationFrame(tick);
+for (let k = 1; k < LEGS.length; k++) await loadLeg(k);
+window.__dbg = { ready: true, go: (p) => { pos = p; }, got, total };
+</script>
+</body>
+</html>
